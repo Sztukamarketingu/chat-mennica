@@ -54,7 +54,7 @@ app.post('/handler', async (req, res) => {
   if (event === 'ONAPPINSTALL') {
     // Zarejestruj bota
     try {
-      const resp = await fetch(`${clientEndpoint}imbot.register`, {
+      const resp = await fetch(`${clientEndpoint}imbot.register?auth=${applicationToken}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -63,7 +63,6 @@ app.post('/handler', async (req, res) => {
           OPENLINE:      'Y',
           NAME:          'Asystent Mennica',
           COLOR:         'AQUA',
-          auth:          applicationToken,
         }),
       });
       const data = await resp.json();
