@@ -7,7 +7,7 @@ app.use(express.urlencoded({ extended: true }));
 const eventLog = [];
 
 const N8N_BOT_WEBHOOK = 'https://n8n.sztukaautomatyzacji.pl/webhook/mennica-chatbase-bot';
-const BITRIX_WEBHOOK  = 'https://mennica.bitrix24.pl/rest/10/jxsd91458zoj2r6t/';
+const BITRIX_REST     = 'https://mennica.bitrix24.pl/rest/';
 
 // Strona instalacji — otwierana w iframe w Bitrix
 app.get('/install', (req, res) => {
@@ -42,26 +42,44 @@ app.get('/install', (req, res) => {
 
 // Handler — odbiera wszystkie eventy z Bitrix
 app.post('/handler', async (req, res) => {
-  const body   = req.body || {};
-  const event  = body.event || '';
-  const auth   = body.auth  || {};
+  const body  = req.body || {};
+
+  // Bitrix wysyła event jako małe litery w polu "event"
+  // ale pola auth jako wielkie litery płasko (AUTH_ID, APPLICATION_TOKEN, APPLICATION_SCOPE)
+  const event = body.event || body.EVENT || '';
+
+  // Obsługa obu formatów: płaski uppercase (ONAPPINSTALL) i zagnieżdżony (legacy)
+  const applicationToken = body.APPLICATION_TOKEN || body.auth?.application_token || '';
+  const authId           = body.AUTH_ID           || body.auth?.access_token      || '';
+  const scope            = body.APPLICATION_SCOPE || '';
 
   // Zapisz event do logu debug
-  eventLog.unshift({ ts: new Date().toISOString(), event, auth: JSON.stringify(auth).slice(0, 300), body: JSON.stringify(body).slice(0, 500) });
+  eventLog.unshift({
+    ts: new Date().toISOString(),
+    event,
+    scope: scope.slice(0, 300),
+    authId: authId.slice(0, 20) + '...',
+    applicationToken: applicationToken.slice(0, 20) + '...',
+    body: JSON.stringify(body).slice(0, 600),
+  });
   if (eventLog.length > 10) eventLog.pop();
 
-  console.log(`[${new Date().toISOString()}] Event: ${event}`, JSON.stringify(auth).slice(0, 120));
+  console.log(`[${new Date().toISOString()}] Event: "${event}" scope: ${scope.slice(0, 100)}`);
 
   // Zawsze odpowiedz 200 szybko
   res.json({ status: 'ok' });
 
-  const clientEndpoint   = auth.client_endpoint   || '';
-  const applicationToken = auth.application_token || '';
+  // ONAPPINSTALL — Bitrix może wysłać event pusty przy instalacji lokalnej,
+  // wykrywamy po obecności APPLICATION_TOKEN + APPLICATION_SCOPE
+  const isInstall = event === 'ONAPPINSTALL' || (!event && applicationToken && scope);
 
-  if (event === 'ONAPPINSTALL') {
-    // Zarejestruj bota
+  if (isInstall) {
+    if (!scope.includes('imbot')) {
+      console.warn('[INSTALL] Brak scope "imbot" — dodaj uprawnienia imbot, im, imopenlines w ustawieniach aplikacji Bitrix i zainstaluj ponownie.');
+      return;
+    }
     try {
-      const resp = await fetch(`${clientEndpoint}imbot.register?auth=${applicationToken}`, {
+      const resp = await fetch(`${BITRIX_REST}imbot.register?auth=${authId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -81,13 +99,17 @@ app.post('/handler', async (req, res) => {
   }
 
   if (event === 'ONIMBOTMESSAGEADD') {
-    // Przekaż wiadomość do n8n → Chatbase
+    // Ten event normalnie idzie bezpośrednio do n8n (EVENT_HANDLER w imbot.register),
+    // ale obsługujemy na wszelki wypadek
     const params = body.data?.PARAMS || {};
     try {
       await fetch(N8N_BOT_WEBHOOK, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data: { PARAMS: params }, auth }),
+        body: JSON.stringify({
+          data: { PARAMS: params },
+          auth: { AUTH_ID: authId, APPLICATION_TOKEN: applicationToken },
+        }),
       });
     } catch (e) {
       console.error('[BOT] Błąd przekazania do n8n:', e.message);
@@ -96,7 +118,7 @@ app.post('/handler', async (req, res) => {
   }
 
   // Pozostałe eventy — tylko loguj
-  console.log(`[EVENT] ${event} — pomijam`);
+  console.log(`[EVENT] "${event}" — pomijam`);
 });
 
 // Health check
