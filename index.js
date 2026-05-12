@@ -80,12 +80,13 @@ app.post('/handler', async (req, res) => {
     }
     try {
       const params = new URLSearchParams({
-        auth:          authId,
-        CODE:          'mennica_ai_bot',
-        EVENT_HANDLER: N8N_BOT_WEBHOOK,
-        OPENLINE:      'Y',
-        NAME:          'Asystent Mennica',
-        COLOR:         'AQUA',
+        auth:                authId,
+        CODE:                'mennica_ai_bot',
+        TYPE:                'B',
+        EVENT_HANDLER:       N8N_BOT_WEBHOOK,
+        OPENLINE:            'Y',
+        'PROPERTIES[NAME]':  'Asystent Mennica',
+        'PROPERTIES[COLOR]': 'AQUA',
       });
       const resp = await fetch(`${BITRIX_REST}imbot.register`, {
         method: 'POST',
