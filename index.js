@@ -79,16 +79,18 @@ app.post('/handler', async (req, res) => {
       return;
     }
     try {
-      const resp = await fetch(`${BITRIX_REST}imbot.register?auth=${authId}`, {
+      const params = new URLSearchParams({
+        auth:          authId,
+        CODE:          'mennica_ai_bot',
+        EVENT_HANDLER: N8N_BOT_WEBHOOK,
+        OPENLINE:      'Y',
+        NAME:          'Asystent Mennica',
+        COLOR:         'AQUA',
+      });
+      const resp = await fetch(`${BITRIX_REST}imbot.register`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          CODE:          'mennica_ai_bot',
-          EVENT_HANDLER: N8N_BOT_WEBHOOK,
-          OPENLINE:      'Y',
-          NAME:          'Asystent Mennica',
-          COLOR:         'AQUA',
-        }),
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
       });
       const data = await resp.json();
       console.log('[INSTALL] imbot.register:', JSON.stringify(data));
