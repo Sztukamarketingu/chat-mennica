@@ -3,6 +3,9 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Przechowuj ostatnie 10 eventów w pamięci (debug)
+const eventLog = [];
+
 const N8N_BOT_WEBHOOK = 'https://n8n.sztukaautomatyzacji.pl/webhook/mennica-chatbase-bot';
 const BITRIX_WEBHOOK  = 'https://mennica.bitrix24.pl/rest/10/jxsd91458zoj2r6t/';
 
@@ -42,6 +45,10 @@ app.post('/handler', async (req, res) => {
   const body   = req.body || {};
   const event  = body.event || '';
   const auth   = body.auth  || {};
+
+  // Zapisz event do logu debug
+  eventLog.unshift({ ts: new Date().toISOString(), event, auth: JSON.stringify(auth).slice(0, 300), body: JSON.stringify(body).slice(0, 500) });
+  if (eventLog.length > 10) eventLog.pop();
 
   console.log(`[${new Date().toISOString()}] Event: ${event}`, JSON.stringify(auth).slice(0, 120));
 
@@ -94,6 +101,9 @@ app.post('/handler', async (req, res) => {
 
 // Health check
 app.get('/health', (req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
+
+// Debug — ostatnie eventy z Bitrix
+app.get('/debug', (req, res) => res.json({ events: eventLog }));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Mennica Bitrix App nasłuchuje na porcie ${PORT}`));
